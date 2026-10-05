@@ -5,6 +5,3 @@ compatibility_flags = ["nodejs_compat"]
 
 [triggers]
 crons = ["* * * * *"]
-
-[secrets]
-required = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]
