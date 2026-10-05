@@ -5,6 +5,7 @@ const STAKING_URL = "https://staking.chain.link/";
 const RPC_URL = process.env.ETH_RPC_URL || "https://ethereum-rpc.publicnode.com";
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const STATUS_ONLY = process.env.STATUS_ONLY === "1";
 
 const ABI = [
   "function getMaxPoolSize() view returns (uint256)",
@@ -63,6 +64,13 @@ try {
     availableLINK: availableLink,
     observedAtVN: vnTime()
   });
+
+  if (STATUS_ONLY) {
+    const state = active && available > 0n ? `🟢 OPEN — ${availableLink} LINK available` : `🔴 FULL / unavailable — ${availableLink} LINK available`;
+    await telegram(`🔎 Chainlink Community Staking Status\n\n${state}\nPool: ${stakedLink} / ${maxLink} LINK\nEthereum block: ${block}\nChecked: ${vnTime()} Asia/Ho_Chi_Minh\n\nOfficial staking: ${STAKING_URL}`);
+    console.log("Status reply sent.");
+    process.exit(0);
+  }
 
   // Only alert when the official pool contract is active AND capacity is actually open.
   if (active && available > 0n) {
