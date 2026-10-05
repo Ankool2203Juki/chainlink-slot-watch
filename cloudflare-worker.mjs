@@ -87,6 +87,18 @@ export default {
       return new Response("Chainlink Slot Watch worker is alive.", { status: 200 });
     }
 
+    // One-click webhook setup without exposing the Telegram bot token.
+    if (url.pathname === "/setup-webhook" && request.method === "GET") {
+      const webhookUrl = new URL("/telegram", request.url).toString();
+      const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: webhookUrl })
+      });
+      const body = await r.text();
+      return new Response(body, { status: r.ok ? 200 : 500, headers: { "content-type": "application/json" } });
+    }
+
     // Telegram webhook: set Telegram's webhook to this Worker URL + /telegram.
     if (url.pathname === "/telegram" && request.method === "POST") {
       const update = await request.json();
