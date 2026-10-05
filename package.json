@@ -4,5 +4,12 @@
   "type": "module",
   "dependencies": {
     "ethers": "^6.15.0"
+  },
+  "scripts": {
+    "cf:deploy": "wrangler deploy",
+    "cf:dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
   }
 }
