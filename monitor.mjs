@@ -67,7 +67,7 @@ try {
   // Only alert when the official pool contract is active AND capacity is actually open.
   if (active && available > 0n) {
     await telegram(
-      `🚨 CHAINLINK COMMUNITY STAKING SLOT OPEN
+      `🚨🚨 CHAINLINK COMMUNITY STAKING SLOT OPEN 🚨🚨\n\n⏰ This alert repeats every check (~5 min) while capacity remains open.
 
 Available: ${availableLink} LINK
 Pool: ${stakedLink} / ${maxLink} LINK
