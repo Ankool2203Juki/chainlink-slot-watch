@@ -31,9 +31,9 @@ async function telegram(env, text) {
 }
 
 async function check(env) {
-  await telegram(env, `🧪 CLOUDFLARE LIVE TEST\n\nCron → Worker → Telegram is working.\nChecked: ${vnTime()} Asia/Ho_Chi_Minh\n\nTEST ONLY — this does NOT mean a Chainlink staking slot is open.`);
-  console.log("Cloudflare live test sent.");
-  return;
+  if (env.CLOUDFLARE_TEST_ONCE === "1") {
+    console.log("CLOUDFLARE_TEST_ONCE is set, but live test mode is disabled in production.");
+  }
 
   const rpc = env.ETH_RPC_URL || "https://ethereum-rpc.publicnode.com";
   const provider = new JsonRpcProvider(rpc);
