@@ -42,6 +42,14 @@ jobs:
         run: |
           node -e 'fetch("https://api.telegram.org/bot"+process.env.TELEGRAM_BOT_TOKEN+"/sendMessage",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:process.env.TELEGRAM_CHAT_ID,text:"✅ Chainlink Slot Watch test OK!\nGitHub Actions → Telegram is working.\n\nThe real monitor will alert only when Community Pool capacity is verifiably available."})}).then(async r=>{if(!r.ok)throw new Error(await r.text());console.log("Telegram test sent.")})'
 
+      - name: Reply to Telegram /status
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.test_telegram) }}
+        env:
+          ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node telegram-command.mjs
+
       - name: Check Chainlink Community Pool
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.test_telegram) }}
         env:
