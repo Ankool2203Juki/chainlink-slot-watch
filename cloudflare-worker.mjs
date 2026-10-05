@@ -30,23 +30,25 @@ async function telegram(env, text) {
   if (!r.ok) throw new Error(`Telegram error: ${r.status} ${await r.text()}`);
 }
 
-async function check(env) {
-  if (env.CLOUDFLARE_TEST_ONCE === "1") {
-    console.log("CLOUDFLARE_TEST_ONCE is set, but live test mode is disabled in production.");
-  }
-
+async function readPool(env) {
   const rpc = env.ETH_RPC_URL || "https://ethereum-rpc.publicnode.com";
   const provider = new JsonRpcProvider(rpc);
   const pool = new Contract(POOL, ABI, provider);
   const block = await provider.getBlockNumber();
   const opts = { blockTag: block };
   const [maxPool, totalPrincipal, active] = await Promise.all([
-    pool.getMaxPoolSize(opts),
-    pool.getTotalPrincipal(opts),
-    pool.isActive(opts)
+    pool.getMaxPoolSize(opts), pool.getTotalPrincipal(opts), pool.isActive(opts)
   ]);
-
   const available = maxPool > totalPrincipal ? maxPool - totalPrincipal : 0n;
+  return { block, active, maxPool, totalPrincipal, available };
+}
+
+async function check(env) {
+  if (env.CLOUDFLARE_TEST_ONCE === "1") {
+    console.log("CLOUDFLARE_TEST_ONCE is set, but live test mode is disabled in production.");
+  }
+
+  const { block, active, maxPool, totalPrincipal, available } = await readPool(env);
   const availableLink = formatUnits(available, 18);
   const maxLink = formatUnits(maxPool, 18);
   const stakedLink = formatUnits(totalPrincipal, 18);
@@ -79,10 +81,35 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(check(env));
   },
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       return new Response("Chainlink Slot Watch worker is alive.", { status: 200 });
+    }
+
+    // Telegram webhook: set Telegram's webhook to this Worker URL + /telegram.
+    if (url.pathname === "/telegram" && request.method === "POST") {
+      const update = await request.json();
+      const msg = update?.message;
+      const text = msg?.text?.trim();
+      if (String(msg?.chat?.id) === String(env.TELEGRAM_CHAT_ID) && text?.split(/\\s+/)[0]?.toLowerCase().startsWith("/status")) {
+        ctx.waitUntil((async () => {
+          const { block, active, maxPool, totalPrincipal, available } = await readPool(env);
+          const availableLink = formatUnits(available, 18);
+          const maxLink = formatUnits(maxPool, 18);
+          const stakedLink = formatUnits(totalPrincipal, 18);
+          await telegram(env, `📊 Chainlink Community Pool status
+
+Active: ${active ? "YES" : "NO"}
+Available: ${availableLink} LINK
+Pool: ${stakedLink} / ${maxLink} LINK
+Ethereum block: ${block}
+Checked: ${vnTime()} Asia/Ho_Chi_Minh
+
+Official staking: ${STAKING_URL}`);
+        })());
+      }
+      return new Response("OK");
     }
     return new Response("Not found", { status: 404 });
   }
