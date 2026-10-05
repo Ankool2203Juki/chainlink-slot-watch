@@ -1,0 +1,10 @@
+name = "chainlink-slot-watch"
+main = "cloudflare-worker.mjs"
+compatibility_date = "2026-10-05"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["* * * * *"]
+
+[secrets]
+required = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]
