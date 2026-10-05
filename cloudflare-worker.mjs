@@ -31,6 +31,12 @@ async function telegram(env, text) {
 }
 
 async function check(env) {
+  if (env.CLOUDFLARE_TEST_ONCE === "1") {
+    await telegram(env, `✅ Cloudflare Chainlink Slot Watch test OK!\n\nCloudflare Cron → Telegram is working.\nChecked: ${vnTime()} Asia/Ho_Chi_Minh\n\nThis is only a test message; it does NOT mean a staking slot is open.`);
+    console.log("Cloudflare Telegram test sent.");
+    return;
+  }
+
   const rpc = env.ETH_RPC_URL || "https://ethereum-rpc.publicnode.com";
   const provider = new JsonRpcProvider(rpc);
   const pool = new Contract(POOL, ABI, provider);
