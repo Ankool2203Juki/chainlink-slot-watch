@@ -117,9 +117,7 @@ async function start() {
   };
   provider.websocket.onerror = (e) => console.error("WebSocket error:", e?.message || e);
 
-  // Railway handles /status directly. Poll every 2s for near-instant replies.
-  setInterval(pollTelegramStatus, 2000);
+  await startHttpServer();
   await check();
-  await pollTelegramStatus();
 }
 start();
