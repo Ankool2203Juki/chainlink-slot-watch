@@ -75,30 +75,36 @@ ${STAKING_URL}
   }
 }
 
-async function pollTelegramStatus() {
-  try {
-    const r = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?offset=${lastStatusUpdate + 1}&timeout=0&allowed_updates=%5B%22message%22%5D`);
-    if (!r.ok) throw new Error(`Telegram getUpdates: ${r.status} ${await r.text()}`);
-    const data = await r.json();
-    for (const u of data.result || []) {
-      lastStatusUpdate = Math.max(lastStatusUpdate, u.update_id);
-      const m = u.message;
-      if (!m || String(m.chat?.id) !== String(TELEGRAM_CHAT_ID)) continue;
-      if (!/^\/status(?:@\w+)?(?:\s|$)/i.test(m.text || "")) continue;
+async function handleTelegramUpdate(update) {
+  const m = update?.message;
+  if (!m || String(m.chat?.id) !== String(TELEGRAM_CHAT_ID)) return;
+  const cmd = String(m.text || "").trim().split(" ")[0].split("@")[0].toLowerCase();
+  if (cmd !== "/status") return;
+  const { maxPool, totalPrincipal, active, available } = await readPool();
+  await telegram("Chainlink Community Pool — REALTIME STATUS\n\nActive: " + (active ? "YES" : "NO") +
+    "\nAvailable: " + formatUnits(available, 18) + " LINK\nPool: " +
+    formatUnits(totalPrincipal, 18) + " / " + formatUnits(maxPool, 18) +
+    " LINK\nChecked: " + vnTime() + " Asia/Ho_Chi_Minh\n\n" + STAKING_URL);
+}
 
-      const { maxPool, totalPrincipal, active, available } = await readPool();
-      await telegram(`📊 Chainlink Community Pool — REALTIME STATUS
-
-Active: ${active ? "YES" : "NO"}
-Available: ${formatUnits(available, 18)} LINK
-Pool: ${formatUnits(totalPrincipal, 18)} / ${formatUnits(maxPool, 18)} LINK
-Checked: ${vnTime()} Asia/Ho_Chi_Minh
-
-${STAKING_URL}`);
+async function startHttpServer() {
+  const http = await import("node:http");
+  const port = Number(process.env.PORT || 8080);
+  http.createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/health") {
+      res.writeHead(200); res.end("OK"); return;
     }
-  } catch (e) {
-    console.error("Telegram status poll failed:", e?.message || e);
-  }
+    if (req.method === "POST" && req.url === "/telegram") {
+      let body = "";
+      req.on("data", chunk => body += chunk);
+      req.on("end", async () => {
+        try { await handleTelegramUpdate(JSON.parse(body || "{}")); res.writeHead(200); res.end("OK"); }
+        catch (e) { console.error("Telegram webhook failed:", e?.message || e); res.writeHead(500); res.end("ERROR"); }
+      });
+      return;
+    }
+    res.writeHead(404); res.end("Not found");
+  }).listen(port, "0.0.0.0", () => console.log("HTTP webhook listening on port", port));
 }
 
 async function start() {
