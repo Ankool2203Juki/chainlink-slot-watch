@@ -8,7 +8,7 @@ const ABI = [
   "function isActive() view returns (bool)"
 ];
 
-const { ETH_WS_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = process.env;
+const { ETH_WS_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_GROUP_CHAT_ID } = process.env;
 if (!ETH_WS_URL || !TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   throw new Error("Set ETH_WS_URL, TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.");
 }
@@ -21,13 +21,20 @@ function vnTime() {
   }).format(new Date());
 }
 
-async function telegram(text) {
+async function telegramTo(chatId, text) {
   const r = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, disable_web_page_preview: true })
+    body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true })
   });
   if (!r.ok) throw new Error(`Telegram error: ${r.status} ${await r.text()}`);
+}
+
+async function telegram(text) {
+  await telegramTo(TELEGRAM_CHAT_ID, text);
+  if (TELEGRAM_GROUP_CHAT_ID && String(TELEGRAM_GROUP_CHAT_ID) !== String(TELEGRAM_CHAT_ID)) {
+    await telegramTo(TELEGRAM_GROUP_CHAT_ID, text);
+  }
 }
 
 let provider;
@@ -79,15 +86,27 @@ ${STAKING_URL}
 async function handleTelegramUpdate(update) {
   console.log("Telegram update received");
   const m = update?.message;
-  if (!m) {
-    console.log("Telegram message present: NO");
+  if (!m) return;
+
+  const chatId = String(m.chat?.id ?? "");
+  const senderId = String(m.from?.id ?? "");
+  const ownerId = String(TELEGRAM_CHAT_ID);
+  const groupId = String(TELEGRAM_GROUP_CHAT_ID || "");
+  const cmd = String(m.text || "").trim().split(" ")[0].split("@")[0].toLowerCase();
+  const isPrivateOwner = chatId === ownerId;
+  const isConfiguredGroup = groupId && chatId === groupId;
+  const isOwnerSender = senderId === ownerId;
+
+  console.log("Telegram command:", cmd || "(none)", "authorized:", (isPrivateOwner || isConfiguredGroup) ? "YES" : "NO");
+
+  // Safe helper: only the bot owner can ask for a group's ID.
+  if (cmd === "/chatid" && m.chat?.type !== "private" && isOwnerSender) {
+    await telegramTo(chatId, "Group chat ID: " + chatId + "\n\nAdd this value in Railway as TELEGRAM_GROUP_CHAT_ID.");
     return;
   }
-  const chatMatched = String(m.chat?.id) === String(TELEGRAM_CHAT_ID);
-  console.log("Telegram chat matched:", chatMatched ? "YES" : "NO");
-  const cmd = String(m.text || "").trim().split(" ")[0].split("@")[0].toLowerCase();
-  console.log("Telegram command:", cmd || "(none)");
-  if (!chatMatched || cmd !== "/status") return;
+
+  if (cmd !== "/status" || (!isPrivateOwner && !isConfiguredGroup)) return;
+
   const statusPool = new Contract(POOL, ABI, statusProvider);
   const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Status RPC timeout")), 8000));
   const values = Promise.all([
@@ -96,10 +115,11 @@ async function handleTelegramUpdate(update) {
   const [maxPool, totalPrincipal, active] = await Promise.race([values, timeout]);
   const available = maxPool > totalPrincipal ? maxPool - totalPrincipal : 0n;
   console.log("Telegram status read OK");
-  await telegram("Chainlink Community Pool — REALTIME STATUS\n\nActive: " + (active ? "YES" : "NO") +
+  await telegramTo(chatId, "Chainlink Community Pool — REALTIME STATUS\n\nActive: " + (active ? "YES" : "NO") +
     "\nAvailable: " + formatUnits(available, 18) + " LINK\nPool: " +
     formatUnits(totalPrincipal, 18) + " / " + formatUnits(maxPool, 18) +
     " LINK\nChecked: " + vnTime() + " Asia/Ho_Chi_Minh\n\n" + STAKING_URL);
+  console.log("Telegram status sent OK");
 }
 
 async function startHttpServer() {
