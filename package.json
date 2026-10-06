@@ -7,7 +7,8 @@
   },
   "scripts": {
     "cf:deploy": "wrangler deploy",
-    "cf:dev": "wrangler dev"
+    "cf:dev": "wrangler dev",
+    "watch:realtime": "node realtime-watcher.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
