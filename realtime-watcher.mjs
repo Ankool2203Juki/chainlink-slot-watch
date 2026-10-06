@@ -1,4 +1,4 @@
-import { Contract, WebSocketProvider, formatUnits } from "ethers";
+import { Contract, WebSocketProvider, JsonRpcProvider, formatUnits } from "ethers";
 
 const POOL = "0xBc10f2E862ED4502144c7d632a3459F49DFCDB5e";
 const STAKING_URL = "https://staking.chain.link/";
@@ -31,6 +31,7 @@ async function telegram(text) {
 }
 
 let provider;
+const statusProvider = new JsonRpcProvider("https://ethereum-rpc.publicnode.com");
 let checking = false;
 let lastAvailable = 0n;
 let lastAlertAt = 0;
@@ -87,7 +88,14 @@ async function handleTelegramUpdate(update) {
   const cmd = String(m.text || "").trim().split(" ")[0].split("@")[0].toLowerCase();
   console.log("Telegram command:", cmd || "(none)");
   if (!chatMatched || cmd !== "/status") return;
-  const { maxPool, totalPrincipal, active, available } = await readPool();
+  const statusPool = new Contract(POOL, ABI, statusProvider);
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Status RPC timeout")), 8000));
+  const values = Promise.all([
+    statusPool.getMaxPoolSize(), statusPool.getTotalPrincipal(), statusPool.isActive()
+  ]);
+  const [maxPool, totalPrincipal, active] = await Promise.race([values, timeout]);
+  const available = maxPool > totalPrincipal ? maxPool - totalPrincipal : 0n;
+  console.log("Telegram status read OK");
   await telegram("Chainlink Community Pool — REALTIME STATUS\n\nActive: " + (active ? "YES" : "NO") +
     "\nAvailable: " + formatUnits(available, 18) + " LINK\nPool: " +
     formatUnits(totalPrincipal, 18) + " / " + formatUnits(maxPool, 18) +
