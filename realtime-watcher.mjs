@@ -34,19 +34,23 @@ let provider;
 let checking = false;
 let lastAvailable = 0n;
 let lastAlertAt = 0;
+let lastStatusUpdate = 0;
+
+async function readPool(blockNumber) {
+  const pool = new Contract(POOL, ABI, provider);
+  const opts = blockNumber ? { blockTag: blockNumber } : {};
+  const [maxPool, totalPrincipal, active] = await Promise.all([
+    pool.getMaxPoolSize(opts), pool.getTotalPrincipal(opts), pool.isActive(opts)
+  ]);
+  const available = maxPool > totalPrincipal ? maxPool - totalPrincipal : 0n;
+  return { maxPool, totalPrincipal, active, available };
+}
 
 async function check(blockNumber) {
   if (checking) return;
   checking = true;
   try {
-    const pool = new Contract(POOL, ABI, provider);
-    const opts = blockNumber ? { blockTag: blockNumber } : {};
-    const [maxPool, totalPrincipal, active] = await Promise.all([
-      pool.getMaxPoolSize(opts), pool.getTotalPrincipal(opts), pool.isActive(opts)
-    ]);
-    const available = maxPool > totalPrincipal ? maxPool - totalPrincipal : 0n;
-
-    // Alert immediately on 0 -> positive, capacity increase, or every 15s while still open.
+    const { maxPool, totalPrincipal, active, available } = await readPool(blockNumber);
     const now = Date.now();
     if (active && available > 0n &&
         (lastAvailable === 0n || available > lastAvailable || now - lastAlertAt >= 15000)) {
@@ -71,6 +75,32 @@ ${STAKING_URL}
   }
 }
 
+async function pollTelegramStatus() {
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?offset=${lastStatusUpdate + 1}&timeout=0&allowed_updates=%5B%22message%22%5D`);
+    if (!r.ok) throw new Error(`Telegram getUpdates: ${r.status} ${await r.text()}`);
+    const data = await r.json();
+    for (const u of data.result || []) {
+      lastStatusUpdate = Math.max(lastStatusUpdate, u.update_id);
+      const m = u.message;
+      if (!m || String(m.chat?.id) !== String(TELEGRAM_CHAT_ID)) continue;
+      if (!/^\\/status(?:@\\w+)?(?:\\s|$)/i.test(m.text || "")) continue;
+
+      const { maxPool, totalPrincipal, active, available } = await readPool();
+      await telegram(`📊 Chainlink Community Pool — REALTIME STATUS
+
+Active: ${active ? "YES" : "NO"}
+Available: ${formatUnits(available, 18)} LINK
+Pool: ${formatUnits(totalPrincipal, 18)} / ${formatUnits(maxPool, 18)} LINK
+Checked: ${vnTime()} Asia/Ho_Chi_Minh
+
+${STAKING_URL}`);
+    }
+  } catch (e) {
+    console.error("Telegram status poll failed:", e?.message || e);
+  }
+}
+
 async function start() {
   provider = new WebSocketProvider(ETH_WS_URL);
   provider.on("block", (n) => check(n));
@@ -80,6 +110,10 @@ async function start() {
     process.exit(1);
   };
   provider.websocket.onerror = (e) => console.error("WebSocket error:", e?.message || e);
+
+  // Railway handles /status directly. Poll every 2s for near-instant replies.
+  setInterval(pollTelegramStatus, 2000);
   await check();
+  await pollTelegramStatus();
 }
 start();
