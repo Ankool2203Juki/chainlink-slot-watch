@@ -84,7 +84,7 @@ async function pollTelegramStatus() {
       lastStatusUpdate = Math.max(lastStatusUpdate, u.update_id);
       const m = u.message;
       if (!m || String(m.chat?.id) !== String(TELEGRAM_CHAT_ID)) continue;
-      if (!/^\\/status(?:@\\w+)?(?:\\s|$)/i.test(m.text || "")) continue;
+      if (!/^\/status(?:@\w+)?(?:\s|$)/i.test(m.text || "")) continue;
 
       const { maxPool, totalPrincipal, active, available } = await readPool();
       await telegram(`📊 Chainlink Community Pool — REALTIME STATUS
