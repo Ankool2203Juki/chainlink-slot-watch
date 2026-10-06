@@ -76,10 +76,17 @@ ${STAKING_URL}
 }
 
 async function handleTelegramUpdate(update) {
+  console.log("Telegram update received");
   const m = update?.message;
-  if (!m || String(m.chat?.id) !== String(TELEGRAM_CHAT_ID)) return;
+  if (!m) {
+    console.log("Telegram message present: NO");
+    return;
+  }
+  const chatMatched = String(m.chat?.id) === String(TELEGRAM_CHAT_ID);
+  console.log("Telegram chat matched:", chatMatched ? "YES" : "NO");
   const cmd = String(m.text || "").trim().split(" ")[0].split("@")[0].toLowerCase();
-  if (cmd !== "/status") return;
+  console.log("Telegram command:", cmd || "(none)");
+  if (!chatMatched || cmd !== "/status") return;
   const { maxPool, totalPrincipal, active, available } = await readPool();
   await telegram("Chainlink Community Pool — REALTIME STATUS\n\nActive: " + (active ? "YES" : "NO") +
     "\nAvailable: " + formatUnits(available, 18) + " LINK\nPool: " +
