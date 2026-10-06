@@ -97,9 +97,20 @@ async function startHttpServer() {
     if (req.method === "POST" && req.url === "/telegram") {
       let body = "";
       req.on("data", chunk => body += chunk);
-      req.on("end", async () => {
-        try { await handleTelegramUpdate(JSON.parse(body || "{}")); res.writeHead(200); res.end("OK"); }
-        catch (e) { console.error("Telegram webhook failed:", e?.message || e); res.writeHead(500); res.end("ERROR"); }
+      req.on("end", () => {
+        let update;
+        try {
+          update = JSON.parse(body || "{}");
+        } catch (e) {
+          console.error("Telegram webhook JSON failed:", e?.message || e);
+          res.writeHead(400); res.end("BAD REQUEST"); return;
+        }
+
+        // Acknowledge Telegram immediately; do RPC/status work asynchronously.
+        res.writeHead(200); res.end("OK");
+        handleTelegramUpdate(update).catch(e =>
+          console.error("Telegram webhook failed:", e?.message || e)
+        );
       });
       return;
     }
