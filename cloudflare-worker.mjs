@@ -77,47 +77,10 @@ Never enter a seed phrase/private key into a website or bot.`);
   }
 }
 
-async function pollTelegramStatus(env) {
-  const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getUpdates?timeout=0&limit=20`);
-  if (!r.ok) throw new Error(`Telegram getUpdates error: ${r.status} ${await r.text()}`);
-  const data = await r.json();
-  const updates = data.result || [];
-
-  // Only consider commands from the last 2 minutes so old /status messages
-  // do not keep triggering forever on every cron run.
-  const cutoff = Math.floor(Date.now() / 1000) - 120;
-  const matches = updates.filter(u => {
-    const m = u.message;
-    return m &&
-      String(m.chat?.id) === String(env.TELEGRAM_CHAT_ID) &&
-      (m.date || 0) >= cutoff &&
-      m.text?.trim().split(/\s+/)[0]?.toLowerCase().startsWith("/status");
-  });
-
-  if (!matches.length) return;
-
-  const newest = matches[matches.length - 1];
-  // Acknowledge through getUpdates offset so the same command is not processed again.
-  await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getUpdates?offset=${newest.update_id + 1}&limit=1&timeout=0`);
-
-  const { block, active, maxPool, totalPrincipal, available } = await readPool(env);
-  await telegram(env, `📊 Chainlink Community Pool status
-
-Active: ${active ? "YES" : "NO"}
-Available: ${formatUnits(available, 18)} LINK
-Pool: ${formatUnits(totalPrincipal, 18)} / ${formatUnits(maxPool, 18)} LINK
-Ethereum block: ${block}
-Checked: ${vnTime()} Asia/Ho_Chi_Minh
-
-Official staking: ${STAKING_URL}`);
-}
-
 export default {
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(Promise.all([
-      check(env),
-      pollTelegramStatus(env)
-    ]));
+    // Backup slot monitor only. Telegram /status is handled by Railway realtime watcher.
+    ctx.waitUntil(check(env));
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
