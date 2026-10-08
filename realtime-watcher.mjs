@@ -173,8 +173,37 @@ async function startHttpServer() {
 
 async function start() {
   provider = new WebSocketProvider(ETH_WS_URL);
-  provider.on("block", (n) => { console.log("Ethereum block received:", n); void check(n); });
-  provider.websocket.onopen = () => console.log("Ethereum WebSocket connected.");
+  // Subscribe directly to newHeads, with explicit subscription diagnostics.
+  // Keep the 60-second HTTP fallback even if the WebSocket subscription fails.
+  const ws = provider.websocket;
+  let subscriptionId = null;
+  ws.addEventListener("message", (event) => {
+    try {
+      const data = JSON.parse(String(event.data));
+      if (data.id === 919191) {
+        if (data.result) {
+          subscriptionId = data.result;
+          console.log("Ethereum newHeads subscription confirmed:", subscriptionId);
+        } else {
+          console.error("Ethereum newHeads subscription rejected:", JSON.stringify(data.error));
+        }
+      } else if (data.method === "eth_subscription" && data.params?.subscription === subscriptionId) {
+        const n = Number.parseInt(data.params.result?.number, 16);
+        if (Number.isFinite(n)) {
+          console.log("Ethereum block received:", n);
+          void check(n);
+        }
+      }
+    } catch (e) {
+      console.error("Ethereum subscription message error:", e?.message || e);
+    }
+  });
+  const subscribe = () => {
+    console.log("Ethereum WebSocket connected; requesting newHeads subscription.");
+    ws.send(JSON.stringify({ jsonrpc: "2.0", id: 919191, method: "eth_subscribe", params: ["newHeads"] }));
+  };
+  if (ws.readyState === 1) subscribe();
+  else ws.addEventListener("open", subscribe, { once: true });
   provider.websocket.onclose = () => {
     console.error("WebSocket closed; exiting so host can restart.");
     process.exit(1);
