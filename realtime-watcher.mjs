@@ -46,8 +46,8 @@ let lastHeartbeatAt = 0;
 const HEARTBEAT_INTERVAL_MS = 60 * 60 * 1000;
 
 async function readPool(blockNumber) {
-  const pool = new Contract(POOL, ABI, provider);
-  const opts = blockNumber ? { blockTag: blockNumber } : {};
+  const pool = new Contract(POOL, ABI, statusProvider);
+  const opts = {}; // HTTP RPC: avoid a stalled WebSocket contract request
   const [maxPool, totalPrincipal, active] = await Promise.all([
     pool.getMaxPoolSize(opts), pool.getTotalPrincipal(opts), pool.isActive(opts)
   ]);
@@ -59,7 +59,7 @@ async function check(blockNumber) {
   if (checking) return;
   checking = true;
   try {
-    const { maxPool, totalPrincipal, active, available } = await readPool(blockNumber);
+    const { maxPool, totalPrincipal, active, available } = await Promise.race([readPool(blockNumber), new Promise((_, reject) => setTimeout(() => reject(new Error("Pool read timeout (10s)")), 10000))]);
     const now = Date.now();
     if (active && available > 0n &&
         (lastAvailable === 0n || available > lastAvailable || now - lastAlertAt >= 15000)) {
@@ -173,7 +173,7 @@ async function startHttpServer() {
 
 async function start() {
   provider = new WebSocketProvider(ETH_WS_URL);
-  provider.on("block", (n) => check(n));
+  provider.on("block", (n) => { console.log("Ethereum block received:", n); void check(n); });
   provider.websocket.onopen = () => console.log("Ethereum WebSocket connected.");
   provider.websocket.onclose = () => {
     console.error("WebSocket closed; exiting so host can restart.");
@@ -183,5 +183,7 @@ async function start() {
 
   await startHttpServer();
   await check();
+  // Retry independently of block subscription if the provider stops emitting blocks.
+  setInterval(() => { if (!checking) void check(); }, 60000);
 }
 start();
