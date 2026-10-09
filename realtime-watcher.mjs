@@ -42,8 +42,6 @@ const statusProvider = new JsonRpcProvider("https://ethereum-rpc.publicnode.com"
 let checking = false;
 let lastAvailable = 0n;
 let lastAlertAt = 0;
-let lastHeartbeatAt = 0;
-const HEARTBEAT_INTERVAL_MS = 60 * 60 * 1000;
 
 async function readPool(blockNumber) {
   const pool = new Contract(POOL, ABI, statusProvider);
@@ -77,23 +75,7 @@ ${STAKING_URL}
     }
     lastAvailable = available;
     console.log(vnTime(), "block", blockNumber ?? "latest", "available", formatUnits(available,18));
-    if (now - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) {
-      lastHeartbeatAt = now;
-      const msg = "✅ CHAINLINK WATCHER ONLINE\n\n" +
-        "Ethereum WebSocket: Connected\n" +
-        "Last checked block: " + (blockNumber ?? "latest") + "\n" +
-        "Pool active: " + (active ? "YES" : "NO") + "\n" +
-        "Available: " + formatUnits(available, 18) + " LINK\n" +
-        "Checked: " + vnTime() + " Asia/Ho_Chi_Minh\n" +
-        "Monitoring: ACTIVE";
-      await Promise.allSettled([
-        telegramTo(TELEGRAM_CHAT_ID, msg),
-        ...(TELEGRAM_GROUP_CHAT_ID && String(TELEGRAM_GROUP_CHAT_ID) !== String(TELEGRAM_CHAT_ID)
-          ? [telegramTo(TELEGRAM_GROUP_CHAT_ID, msg)] : [])
-      ]).then(results => results.forEach((r, i) => {
-        if (r.status === "rejected") console.error("Heartbeat destination", i, "failed:", r.reason?.message || r.reason);
-      }));
-    }
+
   } catch (e) {
     console.error("check failed:", e?.message || e);
   } finally {
