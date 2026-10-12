@@ -10,10 +10,11 @@ const ABI = [
 const iface = new Interface(ABI);
 const topics = [iface.getEvent("Staked").topicHash, iface.getEvent("Unstaked").topicHash];
 const WINDOW = 7 * 86400000;
-const BLOCKS_PER_QUERY = 1500;
+const BLOCKS_PER_QUERY = 100;
 const DATA_DIR = process.env.FLOW_DATA_DIR || "";
 const file = DATA_DIR ? join(DATA_DIR, "staking-flow.json") : null;
 const rpc = new JsonRpcProvider(process.env.FLOW_RPC_URL || "https://ethereum-rpc.publicnode.com");
+const fallbackRpc = new JsonRpcProvider("https://eth.llamarpc.com");
 let state = { cursor: null, events: [], updatedAt: 0 };
 let syncing = false;
 let lastError = "";
@@ -40,6 +41,7 @@ export async function initFlow() {
 async function scan() {
   if (syncing || !ready) return;
   syncing = true;
+  lastError = "";
   try {
     const head = await rpc.getBlockNumber();
     // About 7 days of Ethereum blocks; timestamps below enforce the exact 7-day window.
@@ -50,9 +52,14 @@ async function scan() {
       const to = Math.min(head - 2, cursor + BLOCKS_PER_QUERY - 1);
       let logs;
       try {
-        logs = await rpc.getLogs({ address: POOL, topics: [topics], fromBlock: cursor, toBlock: to });
+        const filter = { address: POOL, topics: [topics], fromBlock: cursor, toBlock: to };
+        try { logs = await rpc.getLogs(filter); }
+        catch (primaryError) {
+          console.warn("Flow primary RPC getLogs failed:", primaryError.shortMessage || primaryError.message);
+          logs = await fallbackRpc.getLogs(filter);
+        }
       } catch (e) {
-        lastError = "RPC getLogs: " + (e.shortMessage || e.message);
+        lastError = "RPC getLogs: " + (e.shortMessage || e.message) + (e.info?.error?.message ? " (" + e.info.error.message + ")" : "");
         console.error("Flow scan:", lastError);
         break;
       }
@@ -62,7 +69,7 @@ async function scan() {
         if (!parsed) continue;
         let timestamp = byBlock.get(log.blockNumber);
         if (!timestamp) {
-          const block = await rpc.getBlock(log.blockNumber);
+          const block = await rpc.getBlock(log.blockNumber).catch(() => fallbackRpc.getBlock(log.blockNumber));
           if (!block) throw new Error("Block unavailable: " + log.blockNumber);
           timestamp = Number(block.timestamp) * 1000;
           byBlock.set(log.blockNumber, timestamp);
@@ -88,6 +95,7 @@ async function scan() {
     }
     await save();
     if (cursor > head - 2) lastError = "";
+    console.log("Flow scan progress:", state.cursor === null ? "not started" : state.cursor - 1, "of", head - 2, "events:", state.events.length);
   } catch (e) {
     lastError = e.shortMessage || e.message;
     console.error("Flow scan failed:", lastError);
