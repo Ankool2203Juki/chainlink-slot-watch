@@ -1,3 +1,4 @@
+import { initFlow, startFlowSync, flowReport as onchainFlowReport } from "./staking-flow.mjs";
 import { Contract, WebSocketProvider, JsonRpcProvider, formatUnits } from "ethers";
 
 const POOL = "0xBc10f2E862ED4502144c7d632a3459F49DFCDB5e";
@@ -154,7 +155,7 @@ async function handleTelegramUpdate(update) {
   }
 
   if (cmd === "/flow" && (isPrivateOwner || isConfiguredGroup)) {
-    await telegramTo(chatId, flowReport());
+    await telegramTo(chatId, onchainFlowReport());
     return;
   }
   if (cmd !== "/status" || (!isPrivateOwner && !isConfiguredGroup)) return;
@@ -245,6 +246,8 @@ async function start() {
   provider.websocket.onerror = (e) => console.error("WebSocket error:", e?.message || e);
 
   await startHttpServer();
+  await initFlow();
+  startFlowSync();
   await check();
   // Retry independently of block subscription if the provider stops emitting blocks.
   setInterval(() => { if (!checking) void check(); }, 60000);
