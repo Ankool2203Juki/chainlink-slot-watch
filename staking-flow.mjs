@@ -107,35 +107,39 @@ export function flowReport() {
   const stakeSum = total(stake), unstakeSum = total(unstake);
   const net = stakeSum - unstakeSum;
   const fmt = n => Number(formatUnits(n, 18)).toLocaleString("en-US", { maximumFractionDigits: 4 });
-  const label = n => complete ? fmt(n) : "—";
+  const value = n => complete ? fmt(n) : "—";
   const count = n => complete ? String(n) : "—";
   const dayLabel = date => date.toLocaleDateString("en-GB", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit" });
   const days = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(now - (6 - i) * 86400000);
     const d = date.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
     const es = events.filter(e => new Date(e.time).toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }) === d);
-    return dayLabel(date) + "  |  " + (complete
+    return dayLabel(date) + "  " + (complete
       ? "+" + fmt(total(es.filter(e => e.type === "stake"))) + " / -" + fmt(total(es.filter(e => e.type === "unstake")))
-      : "Chưa đủ dữ liệu");
+      : "Chưa xác minh");
   });
   const progress = state.cursor === null ? "Chưa quét" :
-    syncing ? "Đang quét lịch sử" : "Đã quét tới block " + (state.cursor - 1);
+    syncing ? "Đang quét lịch sử" : "Đến block " + (state.cursor - 1);
   const status = lastError ? "⚠️ LỖI ĐỒNG BỘ" : complete ? "✅ ĐÃ ĐỒNG BỘ" : "⏳ ĐANG ĐỒNG BỘ";
-  return "📊 LINK STAKING | 7 NGÀY\\n" +
-    "━━━━━━━━━━━━━━━━━━\\n" +
-    status + "\\n\\n" +
-    "📥 STAKE\\n" +
-    "   " + label(stakeSum) + " LINK  |  " + count(stake.length) + " giao dịch\\n" +
-    "📤 UNSTAKE\\n" +
-    "   " + label(unstakeSum) + " LINK  |  " + count(unstake.length) + " giao dịch\\n" +
-    "💠 DÒNG RÒNG: " + (complete ? (net >= 0n ? "+" : "") + fmt(net) + " LINK" : "Chưa xác định") + "\\n" +
-    "👛 VÍ THAM GIA: " + count(new Set(events.map(e => e.wallet)).size) + "\\n\\n" +
-    "📅 THEO NGÀY (stake / unstake)\\n" +
-    days.join("\\n") + "\\n\\n" +
-    "━━━━━━━━━━━━━━━━━━\\n" +
-    "🔄 " + progress + "\\n" +
-    (lastError ? "⚠️ RPC: " + lastError + "\\n" : "") +
-    "💾 " + (file ? "Đã cấu hình thư mục lưu (cần Volume để bền vững)" : "RAM — chưa có Railway Volume") + "\\n\\n" +
-    "ℹ️ Đây là stake/unstake on-chain, không phải mua/bán LINK." +
-    (!complete ? "\\n⚠️ Dấu — nghĩa là chưa xác minh được, KHÔNG phải 0 LINK." : "");
+  return [
+    "📊 LINK STAKING · 7 NGÀY",
+    status,
+    "",
+    "📥 Stake       " + value(stakeSum) + " LINK",
+    "   Giao dịch: " + count(stake.length),
+    "📤 Unstake   " + value(unstakeSum) + " LINK",
+    "   Giao dịch: " + count(unstake.length),
+    "💠 Ròng        " + (complete ? (net >= 0n ? "+" : "") + fmt(net) + " LINK" : "—"),
+    "👛 Số ví        " + count(new Set(events.map(e => e.wallet)).size),
+    "",
+    "📅 TỪNG NGÀY (stake / unstake)",
+    ...days,
+    "",
+    "🔄 " + progress,
+    ...(lastError ? ["⚠️ RPC: " + lastError] : []),
+    "💾 " + (file ? "Thư mục đã cấu hình; cần Volume" : "RAM; chưa có Volume"),
+    "",
+    "ℹ️ — = chưa xác minh, không phải 0 LINK.",
+    "Stake/unstake không phải mua/bán LINK."
+  ].join("\n");
 }
