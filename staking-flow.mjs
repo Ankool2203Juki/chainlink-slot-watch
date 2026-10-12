@@ -99,33 +99,43 @@ export function startFlowSync() {
 }
 export function flowReport() {
   const now = Date.now();
+  const complete = state.cursor !== null && !syncing && !lastError;
   const events = state.events.filter(e => e.time >= now - WINDOW);
   const stake = events.filter(e => e.type === "stake");
   const unstake = events.filter(e => e.type === "unstake");
-  const total = a => a.reduce((sum,e) => sum + BigInt(e.amount), 0n);
+  const total = a => a.reduce((sum, e) => sum + BigInt(e.amount), 0n);
   const stakeSum = total(stake), unstakeSum = total(unstake);
   const net = stakeSum - unstakeSum;
-  const wallets = new Set(events.map(e => e.wallet)).size;
-  // A slot's exact fill time requires matching pool state after transactions.
-  // Do not infer it from unrelated deposit and withdrawal event timestamps.
-  const days = Array.from({length:7},(_,i)=>{
-    const d = new Date(now - (6-i)*86400000).toLocaleDateString("en-CA",{timeZone:"Asia/Ho_Chi_Minh"});
-    const es = events.filter(e=>new Date(e.time).toLocaleDateString("en-CA",{timeZone:"Asia/Ho_Chi_Minh"})===d);
-    return d.slice(5) + ": +" + formatUnits(total(es.filter(e=>e.type==="stake")),18) +
-      " / -" + formatUnits(total(es.filter(e=>e.type==="unstake")),18) + " LINK";
+  const fmt = n => Number(formatUnits(n, 18)).toLocaleString("en-US", { maximumFractionDigits: 4 });
+  const label = n => complete ? fmt(n) : "—";
+  const count = n => complete ? String(n) : "—";
+  const dayLabel = date => date.toLocaleDateString("en-GB", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit" });
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(now - (6 - i) * 86400000);
+    const d = date.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+    const es = events.filter(e => new Date(e.time).toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }) === d);
+    return dayLabel(date) + "  |  " + (complete
+      ? "+" + fmt(total(es.filter(e => e.type === "stake"))) + " / -" + fmt(total(es.filter(e => e.type === "unstake")))
+      : "Chưa đủ dữ liệu");
   });
-  const coverage = state.cursor === null ? "Chưa quét" :
-    syncing ? "Đang đồng bộ lịch sử" : "Đã quét đến block " + (state.cursor-1);
-  return "📊 DÒNG STAKING LINK — 7 NGÀY (ON-CHAIN)\\n\\n" +
-    "Số giao dịch stake: " + stake.length + "\\n" +
-    "Số giao dịch unstake: " + unstake.length + "\\n" +
-    "LINK stake: " + formatUnits(stakeSum,18) + "\\n" +
-    "LINK unstake: " + formatUnits(unstakeSum,18) + "\\n" +
-    "Dòng ròng: " + (net >= 0n ? "+" : "") + formatUnits(net,18) + " LINK\\n" +
-    "Số ví tham gia: " + wallets + "\\n\\n" +
-    "THEO NGÀY (stake / unstake)\\n" + days.join("\\n") + "\\n\\n" +
-    "Tiến độ: " + coverage + "\\n" +
-    (lastError ? "Lỗi đồng bộ: " + lastError + "\\n" : "") +
-    "Lưu trữ: " + (file ? "Đã cấu hình thư mục (cần Railway Volume để bền vững)" : "RAM — cần cấu hình Railway Volume") +
-    "\\n\\n⚠️ Đây là giao dịch stake/unstake thực, không đồng nghĩa mua/bán LINK. Không suy đoán thời gian lấp slot hoặc điểm nhu cầu khi chưa đủ dữ liệu.";
+  const progress = state.cursor === null ? "Chưa quét" :
+    syncing ? "Đang quét lịch sử" : "Đã quét tới block " + (state.cursor - 1);
+  const status = lastError ? "⚠️ LỖI ĐỒNG BỘ" : complete ? "✅ ĐÃ ĐỒNG BỘ" : "⏳ ĐANG ĐỒNG BỘ";
+  return "📊 LINK STAKING | 7 NGÀY\\n" +
+    "━━━━━━━━━━━━━━━━━━\\n" +
+    status + "\\n\\n" +
+    "📥 STAKE\\n" +
+    "   " + label(stakeSum) + " LINK  |  " + count(stake.length) + " giao dịch\\n" +
+    "📤 UNSTAKE\\n" +
+    "   " + label(unstakeSum) + " LINK  |  " + count(unstake.length) + " giao dịch\\n" +
+    "💠 DÒNG RÒNG: " + (complete ? (net >= 0n ? "+" : "") + fmt(net) + " LINK" : "Chưa xác định") + "\\n" +
+    "👛 VÍ THAM GIA: " + count(new Set(events.map(e => e.wallet)).size) + "\\n\\n" +
+    "📅 THEO NGÀY (stake / unstake)\\n" +
+    days.join("\\n") + "\\n\\n" +
+    "━━━━━━━━━━━━━━━━━━\\n" +
+    "🔄 " + progress + "\\n" +
+    (lastError ? "⚠️ RPC: " + lastError + "\\n" : "") +
+    "💾 " + (file ? "Đã cấu hình thư mục lưu (cần Volume để bền vững)" : "RAM — chưa có Railway Volume") + "\\n\\n" +
+    "ℹ️ Đây là stake/unstake on-chain, không phải mua/bán LINK." +
+    (!complete ? "\\n⚠️ Dấu — nghĩa là chưa xác minh được, KHÔNG phải 0 LINK." : "");
 }
