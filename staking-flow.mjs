@@ -4,8 +4,8 @@ import { join } from "node:path";
 
 const POOL = "0xBc10f2E862ED4502144c7d632a3459F49DFCDB5e";
 const ABI = [
-  "event Staked(address indexed staker, uint256 newStake, uint256 totalStake)",
-  "event Unstaked(address indexed staker, uint256 amount, uint256 claimedReward)"
+  "event Staked(address indexed staker, uint256 amount, uint256 newStake, uint256 newTotalPrincipal)",
+  "event Unstaked(address indexed staker, uint256 amount, uint256 newStake, uint256 newTotalPrincipal)"
 ];
 const iface = new Interface(ABI);
 const topics = [iface.getEvent("Staked").topicHash, iface.getEvent("Unstaked").topicHash];
@@ -18,7 +18,8 @@ const derivedHttpUrl = process.env.ETH_WS_URL?.replace(/^wss:/i, "https:").repla
 const flowUrl = process.env.FLOW_RPC_URL || derivedHttpUrl || "https://ethereum-rpc.publicnode.com";
 const rpc = new JsonRpcProvider(flowUrl, 1, { staticNetwork: true });
 const fallbackRpc = new JsonRpcProvider("https://ethereum-rpc.publicnode.com", 1, { staticNetwork: true });
-let state = { cursor: null, events: [], updatedAt: 0 };
+const SCHEMA_VERSION = 2;
+let state = { cursor: null, events: [], updatedAt: 0, schemaVersion: SCHEMA_VERSION };
 let syncing = false;
 let lastError = "";
 let ready = false;
@@ -39,7 +40,8 @@ export async function initFlow() {
   if (file) {
     try {
       const data = JSON.parse(await readFile(file, "utf8"));
-      if (Array.isArray(data.events) && Number.isInteger(data.cursor)) state = data;
+      if (data.schemaVersion === SCHEMA_VERSION && Array.isArray(data.events) && Number.isInteger(data.cursor)) state = data;
+      else console.log("Flow event ABI updated; rebuilding historical index");
     } catch (e) { if (e.code !== "ENOENT") console.error("Flow data load failed:", e.message); }
   }
   ready = true;
@@ -89,7 +91,7 @@ async function scan() {
           time: timestamp,
           block: log.blockNumber,
           type: parsed.name === "Staked" ? "stake" : "unstake",
-          amount: (parsed.name === "Staked" ? parsed.args.newStake : parsed.args.amount).toString(),
+          amount: (parsed.name === "Staked" ? parsed.args.amount : parsed.args.amount).toString(),
           wallet: String(parsed.args.staker).toLowerCase()
         });
       }
@@ -105,7 +107,11 @@ async function scan() {
     await save();
     if (cursor > head - 2) {
       lastError = "";
-      if (!completionNotified && onInitialSyncComplete) {
+      if (state.events.length === 0) {
+        lastError = "Quét xong nhưng không có event; cần kiểm tra RPC hoặc hợp đồng";
+        console.error("Flow zero-event validation failed");
+      }
+      if (!lastError && !completionNotified && onInitialSyncComplete) {
         try {
           await onInitialSyncComplete(flowReport());
           completionNotified = true;
