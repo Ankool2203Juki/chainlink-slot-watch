@@ -247,7 +247,9 @@ async function start() {
 
   await startHttpServer();
   await initFlow();
-  startFlowSync();
+  startFlowSync(async (report) => {
+    await telegramTo(TELEGRAM_CHAT_ID, "✅ ĐÃ QUÉT XONG LỊCH SỬ LINK STAKING\n\n" + report);
+  });
   await check();
   // Retry independently of block subscription if the provider stops emitting blocks.
   setInterval(() => { if (!checking) void check(); }, 60000);
