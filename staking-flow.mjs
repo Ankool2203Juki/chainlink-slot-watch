@@ -22,6 +22,8 @@ let state = { cursor: null, events: [], updatedAt: 0 };
 let syncing = false;
 let lastError = "";
 let ready = false;
+let lastHead = null;
+let historyStart = null;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function save() {
@@ -47,8 +49,10 @@ async function scan() {
   lastError = "";
   try {
     const head = await rpc.getBlockNumber();
+    lastHead = head;
     // About 7 days of Ethereum blocks; timestamps below enforce the exact 7-day window.
     let cursor = state.cursor === null ? Math.max(0, head - 51000) : state.cursor;
+    if (historyStart === null) historyStart = cursor;
     const cutoff = Date.now() - WINDOW;
     let scanned = 0;
     while (cursor <= head - 2 && scanned < 100) {
@@ -110,7 +114,7 @@ export function startFlowSync() {
 }
 export function flowReport() {
   const now = Date.now();
-  const complete = state.cursor !== null && !syncing && !lastError;
+  const complete = state.cursor !== null && lastHead !== null && state.cursor > lastHead - 2 && !lastError;
   const events = state.events.filter(e => e.time >= now - WINDOW);
   const stake = events.filter(e => e.type === "stake");
   const unstake = events.filter(e => e.type === "unstake");
@@ -130,8 +134,10 @@ export function flowReport() {
       : "Chưa xác minh");
   });
   const progress = state.cursor === null ? "Chưa quét" :
-    syncing ? "Đang quét lịch sử" : "Đến block " + (state.cursor - 1);
-  const status = lastError ? "⚠️ LỖI ĐỒNG BỘ" : complete ? "✅ ĐÃ ĐỒNG BỘ" : "⏳ ĐANG ĐỒNG BỘ";
+    "Block " + (state.cursor - 1) + " / " + (lastHead === null ? "?" : lastHead - 2) +
+    (historyStart === null || lastHead === null ? "" :
+      " (" + Math.min(100, Math.max(0, Math.floor(100 * (state.cursor - historyStart) / Math.max(1, lastHead - 1 - historyStart)))) + "%)");
+  const status = lastError ? "⚠️ LỖI ĐỒNG BỘ" : complete ? "✅ ĐÃ ĐỒNG BỘ" : "⏳ ĐANG QUÉT LỊCH SỬ";
   return [
     "📊 LINK STAKING · 7 NGÀY",
     status,
@@ -150,7 +156,7 @@ export function flowReport() {
     ...(lastError ? ["⚠️ RPC: " + lastError] : []),
     "💾 " + (file ? "Thư mục đã cấu hình; cần Volume" : "RAM; chưa có Volume"),
     "",
-    "ℹ️ — = chưa xác minh, không phải 0 LINK.",
+    "ℹ️ — = chưa quét đủ 7 ngày, không phải 0 LINK.",
     "Stake/unstake không phải mua/bán LINK."
   ].join("\n");
 }
