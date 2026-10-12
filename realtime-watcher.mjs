@@ -46,8 +46,8 @@ let flowSamples = [];
 let flowEvents = [];
 let lastFlowSample = null;
 let openSince = null;
-const FLOW_WINDOW_MS = 24 * 60 * 60 * 1000;
-const FLOW_MAX_SAMPLES = 10000;
+const FLOW_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const FLOW_MAX_SAMPLES = 100000;
 function recordFlow(available, active, now) {
   if (!active) return;
   if (lastFlowSample && lastFlowSample.available === available) return;
@@ -79,7 +79,7 @@ function flowReport() {
   // Experimental score only when enough observed events exist; not a price signal.
   const score = opened.length >= 3 && fillTimes.length >= 3
     ? Math.max(0, Math.min(100, Math.round(100 * (1 / (1 + median / 120))))) : null;
-  return "📊 DÒNG STAKING LINK — 24 GIỜ (BẢN THỬ)\n\n" +
+  return "📊 DÒNG STAKING LINK — 7 NGÀY (BẢN THỬ)\n\n" +
     "Số lần phát hiện slot trống: " + opened.length + "\n" +
     "Số lần phát hiện slot được lấp: " + filled.length + "\n" +
     "Tổng dung lượng slot mở ra: " + formatUnits(sum(opened), 18) + " LINK\n" +
