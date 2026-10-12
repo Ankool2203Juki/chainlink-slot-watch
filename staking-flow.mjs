@@ -13,8 +13,11 @@ const WINDOW = 7 * 86400000;
 const BLOCKS_PER_QUERY = 100;
 const DATA_DIR = process.env.FLOW_DATA_DIR || "";
 const file = DATA_DIR ? join(DATA_DIR, "staking-flow.json") : null;
-const rpc = new JsonRpcProvider(process.env.FLOW_RPC_URL || "https://ethereum-rpc.publicnode.com");
-const fallbackRpc = new JsonRpcProvider("https://eth.llamarpc.com");
+// Reuse the already configured Alchemy WebSocket endpoint over HTTPS for log backfill.
+const derivedHttpUrl = process.env.ETH_WS_URL?.replace(/^wss:/i, "https:").replace(/^ws:/i, "http:");
+const flowUrl = process.env.FLOW_RPC_URL || derivedHttpUrl || "https://ethereum-rpc.publicnode.com";
+const rpc = new JsonRpcProvider(flowUrl, 1, { staticNetwork: true });
+const fallbackRpc = new JsonRpcProvider("https://ethereum-rpc.publicnode.com", 1, { staticNetwork: true });
 let state = { cursor: null, events: [], updatedAt: 0 };
 let syncing = false;
 let lastError = "";
