@@ -10,7 +10,7 @@ const ABI = [
 const iface = new Interface(ABI);
 const topics = [iface.getEvent("Staked").topicHash, iface.getEvent("Unstaked").topicHash];
 const WINDOW = 7 * 86400000;
-const BLOCKS_PER_QUERY = 100;
+const BLOCKS_PER_QUERY = 10; // Alchemy free-tier eth_getLogs historical range can be restricted
 const DATA_DIR = process.env.FLOW_DATA_DIR || "";
 const file = DATA_DIR ? join(DATA_DIR, "staking-flow.json") : null;
 // Reuse the already configured Alchemy WebSocket endpoint over HTTPS for log backfill.
