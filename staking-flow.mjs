@@ -24,6 +24,8 @@ let lastError = "";
 let ready = false;
 let lastHead = null;
 let historyStart = null;
+let onInitialSyncComplete = null;
+let completionNotified = false;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function save() {
@@ -101,14 +103,26 @@ async function scan() {
       await sleep(150);
     }
     await save();
-    if (cursor > head - 2) lastError = "";
+    if (cursor > head - 2) {
+      lastError = "";
+      if (!completionNotified && onInitialSyncComplete) {
+        try {
+          await onInitialSyncComplete(flowReport());
+          completionNotified = true;
+          console.log("Flow initial sync completion notification sent");
+        } catch (e) {
+          console.error("Flow completion notification failed:", e?.message || e);
+        }
+      }
+    }
     console.log("Flow scan progress:", state.cursor === null ? "not started" : state.cursor - 1, "of", head - 2, "events:", state.events.length);
   } catch (e) {
     lastError = e.shortMessage || e.message;
     console.error("Flow scan failed:", lastError);
   } finally { syncing = false; }
 }
-export function startFlowSync() {
+export function startFlowSync(onComplete) {
+  onInitialSyncComplete = onComplete;
   void scan();
   setInterval(() => void scan(), 60000);
 }
