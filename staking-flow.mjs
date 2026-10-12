@@ -58,11 +58,11 @@ async function scan() {
         const filter = { address: POOL, topics: [topics], fromBlock: cursor, toBlock: to };
         try { logs = await rpc.getLogs(filter); }
         catch (primaryError) {
-          console.warn("Flow primary RPC getLogs failed:", primaryError.shortMessage || primaryError.message);
+          console.warn("Flow primary RPC getLogs failed:", "blocks", cursor, "-", to, "code:", primaryError.code, "detail:", primaryError.info?.error?.message || primaryError.error?.message || primaryError.shortMessage || primaryError.message);
           logs = await fallbackRpc.getLogs(filter);
         }
       } catch (e) {
-        lastError = "RPC getLogs: " + (e.shortMessage || e.message) + (e.info?.error?.message ? " (" + e.info.error.message + ")" : "");
+        lastError = "RPC getLogs blocks " + cursor + "-" + to + ": " + (e.info?.error?.message || e.error?.message || e.shortMessage || e.message);
         console.error("Flow scan:", lastError);
         break;
       }
