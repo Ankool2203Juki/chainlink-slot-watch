@@ -79,15 +79,15 @@ function flowReport() {
   // Experimental score only when enough observed events exist; not a price signal.
   const score = opened.length >= 3 && fillTimes.length >= 3
     ? Math.max(0, Math.min(100, Math.round(100 * (1 / (1 + median / 120))))) : null;
-  return "📊 LINK STAKING FLOW — 24H (BETA)\n\n" +
-    "Observed slot openings: " + opened.length + "\n" +
-    "Observed slot fills: " + filled.length + "\n" +
-    "Capacity opened (observed): " + formatUnits(sum(opened), 18) + " LINK\n" +
-    "Capacity filled (observed): " + formatUnits(sum(filled), 18) + " LINK\n" +
-    "Median observed fill time: " + (median === null ? "N/A" : median + "s") + "\n" +
-    "Demand Score (experimental): " + (score === null ? "Insufficient data" : score + "/100") + "\n" +
-    "Tracking since: " + start + "\n\n" +
-    "⚠️ Based on sampled pool capacity, NOT complete on-chain deposits/withdrawals. Fast events between checks may be missed. Score measures fill speed only; it does not predict LINK price. Data resets on Railway restart.";
+  return "📊 DÒNG STAKING LINK — 24 GIỜ (BẢN THỬ)\n\n" +
+    "Số lần phát hiện slot trống: " + opened.length + "\n" +
+    "Số lần phát hiện slot được lấp: " + filled.length + "\n" +
+    "Tổng dung lượng slot mở ra: " + formatUnits(sum(opened), 18) + " LINK\n" +
+    "Tổng dung lượng slot được lấp: " + formatUnits(sum(filled), 18) + " LINK\n" +
+    "Thời gian lấp slot trung vị: " + (median === null ? "N/A" : median + "s") + "\n" +
+    "Điểm nhu cầu staking (thử nghiệm): " + (score === null ? "Chưa đủ dữ liệu" : score + "/100") + "\n" +
+    "Bắt đầu ghi nhận từ: " + start + "\n\n" +
+    "⚠️ Dữ liệu lấy từ các lần kiểm tra dung lượng pool, KHÔNG phải toàn bộ giao dịch stake/unstake on-chain. Có thể bỏ sót slot mở và được lấp quá nhanh. Điểm số chỉ phản ánh tốc độ lấp slot, không dự đoán giá LINK. Dữ liệu sẽ mất khi Railway khởi động lại.";
 }
 
 async function readPool(blockNumber) {
