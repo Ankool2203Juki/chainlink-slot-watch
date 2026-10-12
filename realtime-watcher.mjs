@@ -42,6 +42,53 @@ const statusProvider = new JsonRpcProvider("https://ethereum-rpc.publicnode.com"
 let checking = false;
 let lastAvailable = 0n;
 let lastAlertAt = 0;
+let flowSamples = [];
+let flowEvents = [];
+let lastFlowSample = null;
+let openSince = null;
+const FLOW_WINDOW_MS = 24 * 60 * 60 * 1000;
+const FLOW_MAX_SAMPLES = 10000;
+function recordFlow(available, active, now) {
+  if (!active) return;
+  if (lastFlowSample && lastFlowSample.available === available) return;
+  if (lastFlowSample) {
+    const delta = available - lastFlowSample.available;
+    if (delta > 0n) {
+      flowEvents.push({ time: now, type: "capacity_opened", amount: delta.toString() });
+      if (openSince === null) openSince = now;
+    } else if (delta < 0n) {
+      flowEvents.push({ time: now, type: "capacity_filled", amount: (-delta).toString(),
+        fillSeconds: openSince === null ? null : Math.round((now - openSince) / 1000) });
+      if (available === 0n) openSince = null;
+    }
+  } else if (available > 0n) openSince = now;
+  lastFlowSample = { time: now, available };
+  flowSamples.push({ time: now, available: available.toString() });
+  flowSamples = flowSamples.filter(x => x.time >= now - FLOW_WINDOW_MS).slice(-FLOW_MAX_SAMPLES);
+  flowEvents = flowEvents.filter(x => x.time >= now - FLOW_WINDOW_MS).slice(-FLOW_MAX_SAMPLES);
+}
+function flowReport() {
+  const now = Date.now();
+  const events = flowEvents.filter(x => x.time >= now - FLOW_WINDOW_MS);
+  const opened = events.filter(x => x.type === "capacity_opened");
+  const filled = events.filter(x => x.type === "capacity_filled");
+  const sum = arr => arr.reduce((a, x) => a + BigInt(x.amount), 0n);
+  const fillTimes = filled.map(x => x.fillSeconds).filter(x => x !== null);
+  const median = fillTimes.length ? [...fillTimes].sort((a,b)=>a-b)[Math.floor(fillTimes.length / 2)] : null;
+  const start = flowSamples.length ? new Date(flowSamples[0].time).toLocaleString("en-GB", { timeZone:"Asia/Ho_Chi_Minh" }) : "N/A";
+  // Experimental score only when enough observed events exist; not a price signal.
+  const score = opened.length >= 3 && fillTimes.length >= 3
+    ? Math.max(0, Math.min(100, Math.round(100 * (1 / (1 + median / 120))))) : null;
+  return "📊 LINK STAKING FLOW — 24H (BETA)\n\n" +
+    "Observed slot openings: " + opened.length + "\n" +
+    "Observed slot fills: " + filled.length + "\n" +
+    "Capacity opened (observed): " + formatUnits(sum(opened), 18) + " LINK\n" +
+    "Capacity filled (observed): " + formatUnits(sum(filled), 18) + " LINK\n" +
+    "Median observed fill time: " + (median === null ? "N/A" : median + "s") + "\n" +
+    "Demand Score (experimental): " + (score === null ? "Insufficient data" : score + "/100") + "\n" +
+    "Tracking since: " + start + "\n\n" +
+    "⚠️ Based on sampled pool capacity, NOT complete on-chain deposits/withdrawals. Fast events between checks may be missed. Score measures fill speed only; it does not predict LINK price. Data resets on Railway restart.";
+}
 
 async function readPool(blockNumber) {
   const pool = new Contract(POOL, ABI, statusProvider);
@@ -59,6 +106,7 @@ async function check(blockNumber) {
   try {
     const { maxPool, totalPrincipal, active, available } = await Promise.race([readPool(blockNumber), new Promise((_, reject) => setTimeout(() => reject(new Error("Pool read timeout (10s)")), 10000))]);
     const now = Date.now();
+    recordFlow(available, active, now);
     if (active && available > 0n &&
         (lastAvailable === 0n || available > lastAvailable || now - lastAlertAt >= 15000)) {
       lastAlertAt = now;
@@ -105,6 +153,10 @@ async function handleTelegramUpdate(update) {
     return;
   }
 
+  if (cmd === "/flow" && (isPrivateOwner || isConfiguredGroup)) {
+    await telegramTo(chatId, flowReport());
+    return;
+  }
   if (cmd !== "/status" || (!isPrivateOwner && !isConfiguredGroup)) return;
 
   const statusPool = new Contract(POOL, ABI, statusProvider);
