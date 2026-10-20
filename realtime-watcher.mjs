@@ -108,7 +108,7 @@ async function check(blockNumber) {
     const { maxPool, totalPrincipal, active, available } = await Promise.race([readPool(blockNumber), new Promise((_, reject) => setTimeout(() => reject(new Error("Pool read timeout (10s)")), 10000))]);
     const now = Date.now();
     recordFlow(available, active, now);
-    if (active && available > 0n &&
+    if (false && active && available > 0n &&
         (lastAvailable === 0n || available > lastAvailable || now - lastAlertAt >= 15000)) {
       lastAlertAt = now;
       await telegram(`🚨 CHAINLINK SLOT — REALTIME
@@ -247,9 +247,28 @@ async function start() {
 
   await startHttpServer();
   await initFlow();
-  startFlowSync(async (report) => {
-    await telegramTo(TELEGRAM_CHAT_ID, "✅ ĐÃ QUÉT XONG LỊCH SỬ LINK STAKING\n\n" + report);
-  });
+  startFlowSync();
+  // One private daily summary at 08:00 Asia/Ho_Chi_Minh; no realtime slot alerts.
+  let lastDailySent = "";
+  const sendDailySummary = async () => {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+    }).formatToParts(now);
+    const part = name => parts.find(p => p.type === name)?.value;
+    const day = [part("year"), part("month"), part("day")].join("-");
+    if (part("hour") !== "08" || part("minute") !== "00" || lastDailySent === day) return;
+    lastDailySent = day;
+    try {
+      await telegramTo(TELEGRAM_CHAT_ID, "📅 TỔNG KẾT LINK STAKING HẰNG NGÀY\\n\\n".replaceAll("\\\\n", "\\n") + onchainFlowReport());
+      console.log("Daily staking summary sent:", day);
+    } catch (e) {
+      lastDailySent = "";
+      console.error("Daily staking summary failed:", e?.message || e);
+    }
+  };
+  setInterval(() => void sendDailySummary(), 15000);
   await check();
   // Retry independently of block subscription if the provider stops emitting blocks.
   setInterval(() => { if (!checking) void check(); }, 60000);
