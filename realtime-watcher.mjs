@@ -108,20 +108,6 @@ async function check(blockNumber) {
     const { maxPool, totalPrincipal, active, available } = await Promise.race([readPool(blockNumber), new Promise((_, reject) => setTimeout(() => reject(new Error("Pool read timeout (10s)")), 10000))]);
     const now = Date.now();
     recordFlow(available, active, now);
-    if (false && active && available > 0n &&
-        (lastAvailable === 0n || available > lastAvailable || now - lastAlertAt >= 15000)) {
-      lastAlertAt = now;
-      await telegram(`🚨 CHAINLINK SLOT — REALTIME
-
-Available: ${formatUnits(available, 18)} LINK
-Pool: ${formatUnits(totalPrincipal, 18)} / ${formatUnits(maxPool, 18)} LINK
-Block: ${blockNumber ?? "latest"}
-Detected: ${vnTime()} Asia/Ho_Chi_Minh
-
-${STAKING_URL}
-
-⚠️ Verify staking.chain.link. Never enter seed phrase/private key into a bot.`);
-    }
     lastAvailable = available;
     console.log(vnTime(), "block", blockNumber ?? "latest", "available", formatUnits(available,18));
 
@@ -261,7 +247,7 @@ async function start() {
     if (part("hour") !== "08" || part("minute") !== "00" || lastDailySent === day) return;
     lastDailySent = day;
     try {
-      await telegramTo(TELEGRAM_CHAT_ID, "📅 TỔNG KẾT LINK STAKING HẰNG NGÀY\\n\\n".replaceAll("\\\\n", "\\n") + onchainFlowReport());
+      await telegramTo(TELEGRAM_CHAT_ID, "📅 TỔNG KẾT LINK STAKING HẰNG NGÀY\n\n" + onchainFlowReport());
       console.log("Daily staking summary sent:", day);
     } catch (e) {
       lastDailySent = "";
